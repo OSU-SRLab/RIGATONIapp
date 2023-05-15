@@ -10,8 +10,8 @@ filterResults(
   ControlRNA,
   ControlCan,
   alt.data,
-  Cancers = "all",
-  Mutations = "all"
+  Cancers = c("all"),
+  Mutations = c("all")
 )
 }
 \arguments{
