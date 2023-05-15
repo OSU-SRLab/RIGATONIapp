@@ -10,14 +10,14 @@
 #'
 #' @return A list of dataframes for graph use
 #' @export
-filterResults <- function(Master, MasterRNA, ControlRNA, ControlCan, alt.data, Cancers = 'all', Mutations = 'all'){
-  if (Cancers != 'all'){
+filterResults <- function(Master, MasterRNA, ControlRNA, ControlCan, alt.data, Cancers = c('all'), Mutations = c('all')){
+  if (Cancers[1] != 'all'){
     Master = Master[Master$Cancer %in% Cancers, ]
     MasterRNA = MasterRNA[, colnames(MasterRNA) %in% Master$CaseIDs]
     ControlCan = ControlCan[ControlCan[, 2] %in% Cancers, ]
     ControlRNA = ControlRNA[, colnames(ControlRNA) %in% ControlCan[, 1]]
   }
-  if (Mutations != 'all'){
+  if (Mutations[1] != 'all'){
     Master = Master[Master$Alteration %in% Mutations, ]
     MasterRNA = MasterRNA[, colnames(MasterRNA) %in% Master$CaseIDs]
   }
