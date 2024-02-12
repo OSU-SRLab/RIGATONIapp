@@ -10,7 +10,7 @@
 #'
 #' @return A list of dataframes for graph use
 #' @export
-filterResults <- function(Master, MasterRNA, ControlRNA, ControlCan, alt.data, Cancers = c('all'), Mutations = c('all')){
+filterResults <- function(Master, MasterRNA, ControlRNA, ControlCan, Cancers = c('all'), Mutations = c('all')){
   if (Cancers[1] != 'all'){
     Master = Master[Master$Cancer %in% Cancers, ]
     MasterRNA = MasterRNA[, colnames(MasterRNA) %in% Master$CaseIDs]
@@ -64,23 +64,12 @@ filterResults <- function(Master, MasterRNA, ControlRNA, ControlCan, alt.data, C
 #'
 #' @return new alt.data data frame
 #' @export
-getAltFunctionImmune <- function(Master){
-  if (length(unique(Master$Alteration)) == 1){
-    alts = unique(Master$Alteration)
-  } else {
-    master.split <- split(Master, Master$Alteration)
-    master.split <- lapply(master.split, function(o){
-      o = o[!(duplicated(o[, 1])), ]
-      if (nrow(o) < 5){
-        return(NA)
-      } else {
-        return(o)
-      }
-    })
-    master.split = master.split[!(is.na(master.split))]
-    master.split = master.split[names(master.split) != ""]
-    alts = names(master.split)
-  }
+getAltFunctionImmune <- function(Master, props){
+  master.split <- split(Master, Master$Alteration)
+  master.split <- lapply(master.split, checkConditions)
+  master.split = master.split[!(is.na(master.split))]
+  master.split = master.split[names(master.split) != ""]
+  alts = names(master.split)
   nGOFs = c()
   nLOFs = c()
   nHots = c()
@@ -91,17 +80,13 @@ getAltFunctionImmune <- function(Master){
   fun = c()
   im = c()
   for (x in alts){
-    if (length(alts) == 1){
-      tmp = Master
-    } else {
-      tmp = master.split[[x]]
-    }
+    tmp = master.split[[x]]
     total = nrow(tmp)
     nGOF = nrow(tmp[tmp$Function == 'GOF',])
     nLOF = nrow(tmp[tmp$Function == 'LOF',])
-    nHot = nrow(tmp[tmp$Immune == 'Hot', ])
-    nCold = nrow(tmp[tmp$Immune == 'Cold', ])
-    z = stats::prop.test(nGOF, total, p = NULL, alternative = "two.sided", correct = TRUE)
+    nHot = nrow(tmp[tmp$Immune == 'High', ])
+    nCold = nrow(tmp[tmp$Immune == 'Low', ])
+    z = prop.test(nGOF, sum(nLOF, nGOF), p = NULL, alternative = "two.sided", correct = TRUE)
     if (z$p.value < .05){
       if (nGOF > nLOF){
         nGOFs = c(nGOFs, nGOF)
@@ -123,19 +108,22 @@ getAltFunctionImmune <- function(Master){
       sigsF = c(sigsF, z$p.value)
       fun = c(fun, 'Unknown')
     }
-    z = stats::prop.test(nHot, total, p = .05, alternative = "greater", correct = TRUE)
+    props_can = props[props$Cancer %in% tmp$Cancer, ]
+    prop_high = sum(props_can[, 3])/sum(props_can[, 2])
+    prop_low = sum(props_can[, 4])/sum(props_can[, 2])
+    z = prop.test(nHot, total, p = prop_high, alternative = "greater", correct = TRUE)
     if (z$p.value < .05){
       nHots = c(nHots, nHot)
       nColds = c(nColds, nCold)
       sigsI = c(sigsI, z$p.value)
-      im = c(im, 'Hot')
+      im = c(im, 'High')
     } else {
-      z = stats::prop.test(nCold, total, p = .60, alternative = "greater", correct = TRUE)
+      z = prop.test(nCold, total, p = prop_low, alternative = "greater", correct = TRUE)
       if (z$p.value < .05){
         nHots = c(nHots, nHot)
         nColds = c(nColds, nCold)
         sigsI = c(sigsI, z$p.value)
-        im = c(im, 'Cold')
+        im = c(im, 'Low')
       } else {
         nHots = c(nHots, nHot)
         nColds = c(nColds, nCold)
@@ -145,8 +133,12 @@ getAltFunctionImmune <- function(Master){
     }
   }
   alt <- cbind(alts, totals, nGOFs, nLOFs, sigsF, fun, nHots, nColds, sigsI, im)
+  colnames(alt) = c('Alt.ID', 'Total.Samples', 'nGOFs', 'nLOFs', 'Func.Sig', 'Function', 'nHighs', 'nLows', 'Immu.Sig', 'Immune')
   alt = as.data.frame(alt)
-  colnames(alt) = c('Alt.ID', 'Total.Samples', 'nGOFs', 'nLOFs', 'Func.Sig', 'Function', 'nHots', 'nColds', 'Immu.Sig', 'Immune')
+  alt$Func.Sig = p.adjust(alt$Func.Sig)
+  alt$Function = unlist(lapply(1:nrow(alt), function(x) {ifelse(alt$Func.Sig[x] < .05, return(alt$Function[x]), return('Unknown'))}))
+  alt$Immu.Sig = p.adjust(alt$Immu.Sig)
+  alt$Immune = unlist(lapply(1:nrow(alt), function(x) {ifelse(alt$Immu.Sig[x] < .05, return(alt$Immune[x]), return('Unknown'))}))
   return(alt)
 }
 
